@@ -25,6 +25,9 @@ You should see the program starting and a spectrogram display should pop up.
 The program is listening your microphone using pyaudio library. 
 You can play an audio source with Morse code and you should now see the 4 second buffer in the spectrogram display. 
 
+![GitHub Logo](/images/screen.png)
+Format: ![Alt Text](url)
+
 ##  The CNN-LSTM-CTC model 
 The model files are stored in the mymodel/ directory. 
 You can create or retrain the model using the MorseDecoder.py in the morse/ directory. 

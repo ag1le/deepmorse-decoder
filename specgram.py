@@ -79,6 +79,27 @@ def get_specgram(signal, rate):
     return arr2D, freqs, bins
 
 
+class TextBuffer():
+
+    def __init__(self, length):
+        self.buffer = '*'*length
+        self.length = length
+
+    def update_text(self, string):
+        """ scrolling text buffer """
+        indx = self.buffer.find(string[2:-2])
+        if indx == -1:  # not found - just append
+            print(f"NOT FOUND:{indx} str:{string[2:-2]}")
+            mybuf = self.buffer[len(string):self.length] + string
+        else:   # found - 
+            print(f"FOUND:{indx} buf:{self.buffer[indx:]}")
+            mybuf = self.buffer[len(string):indx] + string
+        print(f"str:{string} mybuf:{mybuf}")
+        self.buffer = mybuf[0:self.length]
+        return self.buffer
+
+global buffer
+buffer = TextBuffer(40)
 
 """
 update_fig:
@@ -118,7 +139,8 @@ def update_fig(n, text_box):
             img, recognized, probability = infer_image(model, img)
             if probability > 0.0000001:
                 # Output decoded text 
-                text_box.set_val( f"{recognized[0]}")
+                txt = buffer.update_text(f"{str(recognized[0])}")
+                text_box.set_val(txt)
                 print(f"n{f} {n} {recognized[0]}")
     return  im, text_box, 
 
@@ -157,7 +179,6 @@ def main():
     """
     fig, (axbox,ax) = plt.subplots(2,1)
     text_box = TextBox(axbox, "Morse:")
-
     extent = (bins[0], bins[-1] * SAMPLES_PER_FRAME, freqs[-1], freqs[0])
 
     im = ax.imshow(

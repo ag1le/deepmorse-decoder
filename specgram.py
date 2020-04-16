@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
 import cv2
+import sys 
+from matplotlib.widgets import TextBox
 
 
 ############### Import Modules ###############
@@ -28,23 +30,18 @@ rate = mic_read.RATE  # sampling rate
 ############### Call Morse decoder ###############
 def infer_image(model, img):
     if img.shape == (128, 32):
-        batch = Batch(None, [img])
-        (recognized, probability) = model.inferBatch(batch, True)
-        return img, recognized, probability
+        try:
+            batch = Batch(None, [img])
+            (recognized, probability) = model.inferBatch(batch, True)
+            return img, recognized, probability
+        except Exception as err:
+            print(f"ERROR:{err}")
     else:
         print(f"ERROR: img shape:{img.shape}")
+    return '', '', 0.0
 
 
-# Load the Tensorlow model
-config = Config("model.yaml")
-model = Model(
-    open("morseCharList.txt").read(),
-    config,
-    decoderType=DecoderType.BestPath,
-    mustRestore=True,
-)
 
-stream, pa = mic_read.open_mic()
 
 
 ############### Functions ###############
@@ -82,6 +79,7 @@ def get_specgram(signal, rate):
     return arr2D, freqs, bins
 
 
+
 """
 update_fig:
 updates the image, just adds on samples at the start until the maximum size is
@@ -90,9 +88,8 @@ data needs to stay, shifting it left, and appending the new data.
 inputs: iteration number
 outputs: updated image
 """
+def update_fig(n, text_box):
 
-
-def update_fig(n):
     data = get_sample(stream, pa)
     arr2D, freqs, bins = get_specgram(data, rate)
 
@@ -114,34 +111,56 @@ def update_fig(n):
 
     # Create a 32x128 array centered to spectrum peak
     if f > 16:
-        print(f"n:{n} f:{f}")
         img = cv2.resize(im_data[f - 16 : f + 16][0:128], (128, 32))
         if img.shape == (32, 128):
             cv2.imwrite("dummy.png", img)
             img = cv2.transpose(img)
             img, recognized, probability = infer_image(model, img)
             if probability > 0.0000001:
-                print(f"infer_image:{recognized} prob:{probability}")
-    return (im,)
+                # Output decoded text 
+                text_box.set_val( f"{recognized[0]}")
+                print(f"n{f} {n} {recognized[0]}")
+    return  im, text_box, 
+
 
 
 def main():
 
+
     global im
+    global stream
+    global pa
+    global model
+    global fig
     ############### Initialize Plot ###############
-    fig = plt.figure()
+    
+
+
+    # Load the Tensorlow model
+    config = Config("model.yaml")
+    model = Model(
+        open("morseCharList.txt").read(),
+        config,
+        decoderType=DecoderType.BestPath,
+        mustRestore=True,
+    )
+
     """
     Launch the stream and the original spectrogram
     """
     stream, pa = mic_read.open_mic()
     data = get_sample(stream, pa)
     arr2D, freqs, bins = get_specgram(data, rate)
+  
     """
-    Setup the plot paramters
+    Setup the spectrogram plot and textbox for the decoder
     """
+    fig, (axbox,ax) = plt.subplots(2,1)
+    text_box = TextBox(axbox, "Morse:")
+
     extent = (bins[0], bins[-1] * SAMPLES_PER_FRAME, freqs[-1], freqs[0])
 
-    im = plt.imshow(
+    im = ax.imshow(
         arr2D,
         aspect="auto",
         extent=extent,
@@ -149,7 +168,6 @@ def main():
         cmap="Greys",
         norm=None,
     )
-
     plt.xlabel("Time (s)")
     plt.ylabel("Frequency (Hz)")
     plt.title("Real Time Spectogram")
@@ -158,8 +176,13 @@ def main():
 
     ############### Animate ###############
     anim = animation.FuncAnimation(
-        fig, update_fig, blit=True, interval=mic_read.CHUNK_SIZE / 1000
+        fig, update_fig,  
+        blit=False, 
+        interval=mic_read.CHUNK_SIZE / 1000,
+        fargs=(text_box,)
     )
+
+
 
     try:
         plt.show()

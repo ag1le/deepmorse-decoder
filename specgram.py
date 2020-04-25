@@ -13,6 +13,7 @@ import numpy as np
 import cv2
 import sys 
 from matplotlib.widgets import TextBox
+from fuzzysearch import find_near_matches
 
 
 ############### Import Modules ###############
@@ -80,26 +81,36 @@ def get_specgram(signal, rate):
 
 
 class TextBuffer():
+    """Buffer to display decoded text """
 
     def __init__(self, length):
         self.buffer = '*'*length
         self.length = length
 
     def update_text(self, string):
-        """ scrolling text buffer """
-        indx = self.buffer.find(string[2:-2])
-        if indx == -1:  # not found - just append
-            print(f"NOT FOUND:{indx} str:{string[2:-2]}")
+        """ scrolling text buffer with matching logic"""
+        try:
+            matches = find_near_matches(string, self.buffer, max_l_dist=3)
+        except:
+            matches = None
+        print(f"string:{string}")
+        if matches:
+            print(f"{self.buffer}")
+            for match in matches:
+                print(f"{' ': <{match.start}}{match.matched}")
+            if match.start + len(match.matched) < self.length:  # match found but not at the end, just append
+                mybuf = self.buffer[len(string):self.length] + string
+            else:                                               # math found - append string and scroll 
+                mybuf = self.buffer[len(string)-len(match.matched):match.start] + string
+        
+        else:                                                   # no match, just append the string 
             mybuf = self.buffer[len(string):self.length] + string
-        else:   # found - 
-            print(f"FOUND:{indx} buf:{self.buffer[indx:]}")
-            mybuf = self.buffer[len(string):indx] + string
-        print(f"str:{string} mybuf:{mybuf}")
         self.buffer = mybuf[0:self.length]
         return self.buffer
 
 global buffer
 buffer = TextBuffer(40)
+
 
 """
 update_fig:
@@ -135,13 +146,21 @@ def update_fig(n, text_box):
         img = cv2.resize(im_data[f - 16 : f + 16][0:128], (128, 32))
         if img.shape == (32, 128):
             cv2.imwrite("dummy.png", img)
+
+            # normalize
+            (m, s) = cv2.meanStdDev(img)
+            m = m[0][0]
+            s = s[0][0]
+            img = img - m
+            img = img / s if s>0 else img
+
             img = cv2.transpose(img)
             img, recognized, probability = infer_image(model, img)
             if probability > 0.0000001:
                 # Output decoded text 
-                txt = buffer.update_text(f"{str(recognized[0])}")
+                txt = buffer.update_text(f"{str(recognized[0][1:-1])}")
                 text_box.set_val(txt)
-                print(f"n{f} {n} {recognized[0]}")
+                print(f"f:{f} n:{n} {txt}")
     return  im, text_box, 
 
 
@@ -159,11 +178,11 @@ def main():
 
 
     # Load the Tensorlow model
-    config = Config("model.yaml")
+    config = Config("model_arrl.yaml")
     model = Model(
-        open("morseCharList.txt").read(),
+        open(config.value("experiment.fnCharList")).read(),
         config,
-        decoderType=DecoderType.BestPath,
+        decoderType=DecoderType.BeamSearch, #,DecoderType.BestPath
         mustRestore=True,
     )
 

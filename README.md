@@ -10,6 +10,7 @@ Install Python libraries using requirements.txt file
 
 ```
 git clone https://github.com/ag1le/deepmorse-decoder.git
+cd deepmorse-decoder
 python3 -m venv venv
 source venv/bin/activate
 pip install -r  requirements.txt
